@@ -9,27 +9,32 @@ class CliffordHWInterface : public hardware_interface::RobotHW
 {
 public:
     CliffordHWInterface();
-
-    bool init();
     void read();
     void write();
+    
+    enum JointIndices
+    {
+        F_STEER,
+        R_STEER,
+        F_WHEEL,
+        R_WHEEL,
+        N_JOINTS
+    };
+
 private:
     hardware_interface::JointStateInterface joint_state_interface_;
     hardware_interface::PositionJointInterface position_joint_interface_;
     hardware_interface::VelocityJointInterface velocity_joint_interface_;
     
-    void steeringCallback(const sensor_msgs::JointState::ConstPtr& msg);
-    void wheelSpeedCallback(const sensor_msgs::JointState::ConstPtr& msg);
+    void stateCallback(const sensor_msgs::JointState::ConstPtr& msg);
 
-    double cmd_pos_[2]; // Front and rear steering
-    double cmd_vel_[2]; // Front and rear motors
+    double cmd_pos_[N_JOINTS];
+    double cmd_vel_[N_JOINTS];
+    double pos_[N_JOINTS];
+    double vel_[N_JOINTS];
+    double eff_[N_JOINTS];
     
-    double pos_[4]; // Position: front steering, rear steering, front wheel, rear wheel
-    double vel_[4]; // Velocities: front steering, rear steering, front wheel, rear wheel
-
     ros::NodeHandle nh_;
-    ros::Duration control_period_;
-    ros::Time last_time_;
 
     ros::Subscriber steering_sub_;
     ros::Subscriber wheel_speed_sub_;
@@ -37,8 +42,7 @@ private:
     ros::Publisher steering_pub_;
     ros::Publisher wheel_speed_pub_;
 
-    sensor_msgs::JointState latest_steering_msg_;
-    sensor_msgs::JointState latest_wheel_speed_msg_;
+    sensor_msgs::JointState latest_state_msg_;
 };
 
 #endif // CLIFFORD_HW_INTERFACE_HPP

@@ -1,99 +1,85 @@
 #include "clifford_control/clifford_hw_interface.hpp"
+#include "clifford_hw_interface.hpp"
 
-// TODO: what is control_period_ for?
-CliffordHWInterface::CliffordHWInterface() : nh_("~"), control_period_(ros::Duration(0.01))
+CliffordHWInterface::CliffordHWInterface() : nh_("~")
 {
-    // JointStateHandles for car joints
-    hardware_interface::JointStateHandle state_handle_front_steering("front_steering_joint", &pos_[0], &vel_[0], &eff_[0]);
-    joint_state_interface_.registerHandle(state_handle_front_steering);
-
-    hardware_interface::JointStateHandle state_handle_rear_steering("rear_steering_joint", &pos_[1], &vel_[1], &eff_[1]);
-    joint_state_interface_.registerHandle(state_handle_rear_steering);
-
-    hardware_interface::JointStateHandle state_handle_front_wheel("front_wheel_joint", &pos_[2], &vel_[2], &eff_[2]);
-    joint_state_interface_.registerHandle(state_handle_rear_steering);
-
-    hardware_interface::JointStateHandle state_handle_rear_wheel("rear_wheel_joint", &pos_[3], &vel_[3], &eff_[3]);
-    joint_state_interface_.registerHandle(state_handle_rear_steering);
-
+    // For setting / getting states of both steerings and wheels.
+    hardware_interface::JointStateHandle state_handle_front_steer(
+        "front_steer", &pos_[F_STEER], &vel_[F_STEER], &eff_[F_STEER]);
+    joint_state_interface_.registerHandle(state_handle_front_steer);
+    
+    hardware_interface::JointStateHandle state_handle_rear_steer(
+        "rear_steer", &pos_[R_STEER], &vel_[R_STEER], &eff_[R_STEER]);
+    joint_state_interface_.registerHandle(state_handle_rear_steer);
+    
+    hardware_interface::JointStateHandle state_handle_front_wheel(
+        "front_wheel", &pos_[F_WHEEL], &vel_[F_WHEEL], &eff_[F_WHEEL]);
+    joint_state_interface_.registerHandle(state_handle_front_wheel);
+    
+    hardware_interface::JointStateHandle state_handle_rear_wheel(
+        "rear_wheel", &pos_[R_WHEEL], &vel_[R_WHEEL], &eff_[R_WHEEL]);
+    joint_state_interface_.registerHandle(state_handle_rear_wheel);
+    
     registerInterface(&joint_state_interface_);
 
-    hardware_interface::JointHandle pos_handle_front_steering(joint_state_interface_.getHandle("front_steering_joint"), &cmd_pos_[0]);
-    position_joint_interface_.registerHandle(pos_handle_front_steering);
+    // For controlling steering position
+    hardware_interface::JointHandle pos_handle_front_steer(
+        joint_state_interface_.getHandle("front_steer"), &cmd_pos_[F_STEER]);
+    position_joint_interface_.registerHandle(pos_handle_front_steer);
     
-    hardware_interface::JointHandle pos_handle_rear_steering(joint_state_interface_.getHandle("rear_steering_joint"), &cmd_pos_[1]);
-    position_joint_interface_.registerHandle(pos_handle_rear_steering);
-
+    hardware_interface::JointHandle pos_handle_rear_steer(
+        joint_state_interface_.getHandle("rear_steer"), &cmd_pos_[R_STEER]);
+    position_joint_interface_.registerHandle(pos_handle_rear_steer);
     registerInterface(&position_joint_interface_);
 
-    hardware_interface::JointHandle vel_handle_front_wheel(joint_state_interface_.getHandle("front_wheel_joint"), &cmd_vel_[0]);
+    // For controlling the velocity of the front / rear wheels.
+    hardware_interface::JointHandle vel_handle_front_wheel(
+        joint_state_interface_.getHandle("front_wheel"), &cmd_vel_[F_WHEEL]);
     velocity_joint_interface_.registerHandle(vel_handle_front_wheel);
     
-    hardware_interface::JointHandle vel_handle_rear_wheel(joint_state_interface_.getHandle("rear_wheel_joint"), &cmd_vel_[1]);
+    hardware_interface::JointHandle vel_handle_rear_wheel(
+        joint_state_interface_.getHandle("rear_wheel"), &cmd_vel_[R_WHEEL]);
     velocity_joint_interface_.registerHandle(vel_handle_rear_wheel);
-    
     registerInterface(&velocity_joint_interface_);
 
-    std::string steering_topic;
-    std::string wheel_speed_topic;
-    bool success = true;
-
-    success &= nh_.getParam("steering_topic", steering_topic);
-    success &= nh_.getParam("wheel_speed_topic", wheel_speed_topic);
-    
-    if (success)
-    {
-        steering_sub_ = nh_.subscribe(steering_topic, 10, &CliffordHwInterface::steeringCallback, this);
-        wheel_speed_sub_ = nh_.subscribe(wheel_speed_topic, 10, &CliffordHwInterface::wheelSpeedCallback, this);
-    }
+    std::string state_topic;
+    if (nh_.getParam("state_topic", state_topic);)
+        steering_sub_ = nh_.subscribe(state_topic, 10, &CliffordHwInterface::stateCallback, this);
     else
-    {
-        ROS_ERROR("steering_topic or wheel_speed_topic not found in rosparam server!");
-    }
+        ROS_ERROR("state_topic not found in rosparam server!");
 
     command_pub_ = nh_.advertise<sensor_msgs::JointState>("/motor_controller/desired_joint_state")
-
-    last_time_ = ros::Time::now();
 }
 
-CliffordHwInterface::read()
+void CliffordHwInterface::read()
 {
-    if (!latest_steering_msg_.name.empty())
+    if (!latest_state_msg_.name.empty())
     {
-        pos_[0] = latest_steering_msg.position[0];
-        vel_[0] = latest_steering_msg.velocity[0];
-        pos_[1] = latest_steering_msg.position[1];
-        pos_[1] = latest_steering_msg.velocity[1];
-    }
+        pos_[F_STEER] = latest_state_msg_.position[F_STEER];
+        pos_[R_STEER] = latest_state_msg_.position[R_STEER];
+        pos_[F_WHEEL] = latest_state_msg_.position[F_WHEEL];
+        pos_[R_WHEEL] = latest_state_msg_.position[R_WHEEL];
 
-    if (!latest_steering_msg_.name.empty())
-    {
-        pos_[2] = latest_wheel_speed_msg_.position[0];
-        vel_[2] = latest_wheel_speed_msg_.velocity[0];
-        pos_[3] = latest_wheel_speed_msg_.position[1];
-        vel_[3] = latest_wheel_speed_msg_.velocity[1];        
+        vel_[F_STEER] = latest_state_msg_.velocity[F_STEER];
+        vel_[R_STEER] = latest_state_msg_.velocity[R_STEER];
+        vel_[F_WHEEL] = latest_state_msg_.velocity[F_WHEEL];
+        vel_[R_WHEEL] = latest_state_msg_.velocity[R_WHEEL];
     }
 }
 
-CliffordHwInterface::write()
+void CliffordHwInterface::write()
 {
-    // Todo: think about the kind of publishers you need to make this happen.
-    
     sensor_msgs::JointState msg;
     msg.header.stamp = ros::Time::now();
     msg.name = {"front_steer, rear_steer, front_wheel, rear_wheel"};
-    msg.position = {pos_[0], pos_[1], pos_[2], pos_[3]};
-    msg.velocity = {vel_[0], vel_[1], vel_[2], vel_[3]};
-    msg.effort = {eff_[0], eff_[1], eff_[2], eff_[3]};
+    msg.position    = {pos_[F_STEER], pos_[R_STEER], pos_[F_WHEEL], pos_[R_WHEEL]};
+    msg.velocity    = {vel_[F_STEER], vel_[R_STEER], vel_[F_WHEEL], vel_[R_WHEEL]};
+    msg.effort      = {eff_[F_STEER], eff_[R_STEER], eff_[F_WHEEL], eff_[R_WHEEL]};
     
     command_pub_.publish(msg);
 }
 
-CliffordHwInterface::steeringCallback(const sensor_msgs::JointState::ConstPtr& msg)
+void CliffordHwInterface::stateCallback(const sensor_msgs::JointState::ConstPtr& msg)
 {
-    latest_steering_msg_ = *msg;
-}
-CliffordHwInterface::wheelSpeedCallback(const sensor_msgs::JointState::ConstPtr& msg)
-{
-    latest_wheel_speed_msg_ = *msg;
+    latest_state_msg_ = *msg;
 }
