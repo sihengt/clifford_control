@@ -51,6 +51,8 @@ CliffordHWInterface::CliffordHWInterface() : nh_("~"), control_period_(ros::Dura
         ROS_ERROR("steering_topic or wheel_speed_topic not found in rosparam server!");
     }
 
+    command_pub_ = nh_.advertise<sensor_msgs::JointState>("/motor_controller/desired_joint_state")
+
     last_time_ = ros::Time::now();
 }
 
@@ -76,6 +78,15 @@ CliffordHwInterface::read()
 CliffordHwInterface::write()
 {
     // Todo: think about the kind of publishers you need to make this happen.
+    
+    sensor_msgs::JointState msg;
+    msg.header.stamp = ros::Time::now();
+    msg.name = {"front_steer, rear_steer, front_wheel, rear_wheel"};
+    msg.position = {pos_[0], pos_[1], pos_[2], pos_[3]};
+    msg.velocity = {vel_[0], vel_[1], vel_[2], vel_[3]};
+    msg.effort = {eff_[0], eff_[1], eff_[2], eff_[3]};
+    
+    command_pub_.publish(msg);
 }
 
 CliffordHwInterface::steeringCallback(const sensor_msgs::JointState::ConstPtr& msg)

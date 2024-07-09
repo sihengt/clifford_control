@@ -34,6 +34,9 @@ private:
     ros::Subscriber steering_sub_;
     ros::Subscriber wheel_speed_sub_;
 
+    ros::Publisher steering_pub_;
+    ros::Publisher wheel_speed_pub_;
+
     sensor_msgs::JointState latest_steering_msg_;
     sensor_msgs::JointState latest_wheel_speed_msg_;
 };
